@@ -1,0 +1,17 @@
+"app/firebase/firebase_key.json" 
+.env
+__pycache__
+firebase_key.json
+*.pyc   
+.vscode
+instance
+*.sqlite
+.DS_Store
+.env
+*.log
+venv/
+firebase/
+
+
+
+
