@@ -17,6 +17,20 @@ class Settings(BaseSettings):
     firebase_client_email: str | None = Field(None, alias="FIREBASE_CLIENT_EMAIL")
     firebase_private_key: str | None = Field(None, alias="FIREBASE_PRIVATE_KEY")
 
+    # ============ STRIPE CONFIGURATION ============
+    stripe_secret_key: str = Field(..., alias="STRIPE_SECRET_KEY")
+    stripe_publishable_key: str = Field(..., alias="STRIPE_PUBLISHABLE_KEY")
+    stripe_webhook_secret: str = Field(..., alias="STRIPE_WEBHOOK_SECRET")
+    stripe_success_url: str = Field(
+        "http://localhost:3000/payment/success?session_id={CHECKOUT_SESSION_ID}",
+        alias="STRIPE_SUCCESS_URL"
+    )
+    stripe_cancel_url: str = Field(
+        "http://localhost:3000/payment/cancel",
+        alias="STRIPE_CANCEL_URL"
+    )
+    # ==============================================
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()

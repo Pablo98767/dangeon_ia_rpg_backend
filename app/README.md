@@ -744,3 +744,8 @@ STRIPE_PRICE_ID=price_...
 
 ## Execute : ##
 uvicorn app.main:app --reload
+
+
+# Ativar Ngrok : 
+
+ngrok http 8000

@@ -25,25 +25,16 @@ def _init_admin_if_needed():
         print(f"[FIREBASE] Inicializando Firebase Admin SDK...")
         print(f"{'='*60}")
         print(f"[FIREBASE] Project ID configurado: {settings.firebase_project_id}")
+        print(f"[FIREBASE] Caminho do arquivo: {settings.firebase_credentials_file}")
         
         cred = None
         cred_path = getattr(settings, "firebase_credentials_file", None)
         
-        # 🔥 NOVA VERIFICAÇÃO: Tenta interpretar como JSON primeiro
+        # Tenta carregar do arquivo JSON primeiro
         if cred_path:
-            # Verifica se o "caminho" é na verdade um JSON
-            if cred_path.strip().startswith('{'):
-                print(f"[FIREBASE] ✅ Detectado JSON inline na variável FIREBASE_CREDENTIALS_FILE")
-                try:
-                    creds_dict = json.loads(cred_path)
-                    cred = credentials.Certificate(creds_dict)
-                    print(f"[FIREBASE] ✅ Credenciais carregadas do JSON inline")
-                except json.JSONDecodeError as e:
-                    print(f"[FIREBASE] ❌ Erro ao fazer parse do JSON: {e}")
-                    raise
-            # Se não for JSON, tenta como arquivo
-            elif os.path.exists(cred_path):
-                print(f"[FIREBASE] Verificando arquivo: {cred_path}")
+            print(f"[FIREBASE] Verificando arquivo: {cred_path}")
+            
+            if os.path.exists(cred_path):
                 print(f"[FIREBASE] ✅ Arquivo encontrado!")
                 
                 try:

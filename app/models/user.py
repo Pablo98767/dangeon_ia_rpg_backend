@@ -19,3 +19,8 @@ class MeOut(BaseModel):
     email: EmailStr | None = None
     email_verified: bool | None = None
     claims: dict | None = None
+    # ============ ADICIONE ESTES CAMPOS ============
+    coin_balance: int = 0
+    total_coins_earned: int = 0
+    total_coins_spent: int = 0
+    # ===============================================
