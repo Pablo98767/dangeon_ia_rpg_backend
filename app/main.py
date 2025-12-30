@@ -1,11 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings
-from routers import health, auth, users
-from routers import stories
-from routers import pix
-from routers import coins
-from routers import webhooks  # ← ADICIONE ESTE IMPORT
+from app.routers import health, auth, users
+from app.routers import stories
+from app.routers import pix
+from app.routers import coins
+from app.routers import webhooks  # ← ADICIONE ESTE IMPORT
 
 def create_app() -> FastAPI:
     app = FastAPI(title=settings.app_name)
