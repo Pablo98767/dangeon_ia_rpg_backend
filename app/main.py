@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from core.config import settings
+from app.core.config import settings
 from app.routers import health, auth, users
 from app.routers import stories
 from app.routers import pix
