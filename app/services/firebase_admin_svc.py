@@ -25,49 +25,70 @@ def _init_admin_if_needed():
         print(f"[FIREBASE] Inicializando Firebase Admin SDK...")
         print(f"{'='*60}")
         print(f"[FIREBASE] Project ID configurado: {settings.firebase_project_id}")
-        print(f"[FIREBASE] Caminho do arquivo: {settings.firebase_credentials_file}")
         
         cred = None
         cred_path = getattr(settings, "firebase_credentials_file", None)
         
-        # Tenta carregar do arquivo JSON primeiro
-        if cred_path:
-            print(f"[FIREBASE] Verificando arquivo: {cred_path}")
+        # OPÇÃO 1: Tenta carregar do arquivo JSON local
+        if cred_path and os.path.exists(cred_path):
+            print(f"[FIREBASE] ✅ Arquivo encontrado: {cred_path}")
             
-            if os.path.exists(cred_path):
-                print(f"[FIREBASE] ✅ Arquivo encontrado!")
-                
-                try:
-                    # Lê o JSON para verificar o project_id
-                    with open(cred_path, 'r') as f:
-                        key_data = json.load(f)
-                        json_project_id = key_data.get('project_id', 'NOT_FOUND')
-                        json_client_email = key_data.get('client_email', 'NOT_FOUND')
-                        
-                        print(f"[FIREBASE] project_id no JSON: {json_project_id}")
-                        print(f"[FIREBASE] client_email no JSON: {json_client_email}")
-                        
-                        # Verifica se os project IDs batem
-                        if json_project_id != settings.firebase_project_id:
-                            print(f"[FIREBASE] ⚠️  WARNING: project_id do JSON ({json_project_id}) != settings ({settings.firebase_project_id})")
-                        else:
-                            print(f"[FIREBASE] ✅ project_id confere!")
+            try:
+                with open(cred_path, 'r') as f:
+                    key_data = json.load(f)
+                    json_project_id = key_data.get('project_id', 'NOT_FOUND')
+                    json_client_email = key_data.get('client_email', 'NOT_FOUND')
                     
-                    # Carrega as credenciais
-                    cred = credentials.Certificate(cred_path)
-                    print(f"[FIREBASE] ✅ Credenciais carregadas do arquivo")
+                    print(f"[FIREBASE] project_id no JSON: {json_project_id}")
+                    print(f"[FIREBASE] client_email no JSON: {json_client_email}")
                     
-                except Exception as e:
-                    print(f"[FIREBASE] ❌ ERRO ao ler arquivo JSON: {e}")
-                    raise
-            else:
-                print(f"[FIREBASE] ❌ Arquivo NÃO encontrado: {cred_path}")
-                print(f"[FIREBASE] Tentando usar variáveis de ambiente...")
+                    if json_project_id != settings.firebase_project_id:
+                        print(f"[FIREBASE] ⚠️  WARNING: project_id do JSON ({json_project_id}) != settings ({settings.firebase_project_id})")
+                    else:
+                        print(f"[FIREBASE] ✅ project_id confere!")
                 
-                # Fallback para variáveis de ambiente
-                if not settings.firebase_private_key or not settings.firebase_client_email:
-                    raise Exception("Arquivo de credenciais não encontrado e variáveis de ambiente não configuradas!")
+                cred = credentials.Certificate(cred_path)
+                print(f"[FIREBASE] ✅ Credenciais carregadas do arquivo local")
                 
+            except Exception as e:
+                print(f"[FIREBASE] ❌ ERRO ao ler arquivo JSON: {e}")
+                raise
+        
+        # OPÇÃO 2: Tenta carregar do JSON completo em variável de ambiente
+        elif settings.firebase_credentials_json:
+            print(f"[FIREBASE] Arquivo local não encontrado")
+            print(f"[FIREBASE] Tentando FIREBASE_CREDENTIALS_JSON...")
+            
+            try:
+                key_data = json.loads(settings.firebase_credentials_json)
+                json_project_id = key_data.get('project_id', 'NOT_FOUND')
+                json_client_email = key_data.get('client_email', 'NOT_FOUND')
+                
+                print(f"[FIREBASE] project_id no JSON: {json_project_id}")
+                print(f"[FIREBASE] client_email no JSON: {json_client_email}")
+                
+                if json_project_id != settings.firebase_project_id:
+                    print(f"[FIREBASE] ⚠️  WARNING: project_id do JSON ({json_project_id}) != settings ({settings.firebase_project_id})")
+                else:
+                    print(f"[FIREBASE] ✅ project_id confere!")
+                
+                cred = credentials.Certificate(key_data)
+                print(f"[FIREBASE] ✅ Credenciais carregadas do FIREBASE_CREDENTIALS_JSON (env)")
+                
+            except json.JSONDecodeError as e:
+                print(f"[FIREBASE] ❌ ERRO: FIREBASE_CREDENTIALS_JSON não é um JSON válido!")
+                print(f"[FIREBASE] Detalhes: {e}")
+                raise Exception("FIREBASE_CREDENTIALS_JSON não é um JSON válido!")
+            except Exception as e:
+                print(f"[FIREBASE] ❌ ERRO ao processar FIREBASE_CREDENTIALS_JSON: {e}")
+                raise
+        
+        # OPÇÃO 3: Tenta usar variáveis de ambiente individuais
+        elif settings.firebase_private_key and settings.firebase_client_email:
+            print(f"[FIREBASE] JSON não encontrado")
+            print(f"[FIREBASE] Tentando variáveis individuais (FIREBASE_PRIVATE_KEY + FIREBASE_CLIENT_EMAIL)...")
+            
+            try:
                 private_key = settings.firebase_private_key.replace("\\n", "\n")
                 cred = credentials.Certificate({
                     "type": "service_account",
@@ -75,16 +96,31 @@ def _init_admin_if_needed():
                     "client_email": settings.firebase_client_email,
                     "private_key": private_key,
                 })
-                print(f"[FIREBASE] ✅ Credenciais carregadas do .env")
+                print(f"[FIREBASE] ✅ Credenciais carregadas de variáveis individuais")
+                
+            except Exception as e:
+                print(f"[FIREBASE] ❌ ERRO ao criar credenciais: {e}")
+                raise
+        
+        # NENHUMA OPÇÃO DISPONÍVEL
         else:
-            print(f"[FIREBASE] ❌ Nenhum caminho de arquivo configurado!")
-            raise Exception("FIREBASE_CREDENTIALS_FILE não configurado no .env")
+            print(f"\n[FIREBASE] ❌ NENHUMA CREDENCIAL CONFIGURADA!")
+            print(f"\n[FIREBASE] Configure uma das opções abaixo:")
+            print(f"  1️⃣  Arquivo local (desenvolvimento):")
+            print(f"      FIREBASE_CREDENTIALS_FILE=/caminho/para/arquivo.json")
+            print(f"\n  2️⃣  JSON completo em variável (produção - RECOMENDADO):")
+            print(f"      FIREBASE_CREDENTIALS_JSON='{{\"type\":\"service_account\",...}}'")
+            print(f"\n  3️⃣  Variáveis individuais (alternativa):")
+            print(f"      FIREBASE_PRIVATE_KEY='-----BEGIN PRIVATE KEY-----\\n...'")
+            print(f"      FIREBASE_CLIENT_EMAIL='...@....iam.gserviceaccount.com'")
+            print(f"\n{'='*60}\n")
+            raise Exception("Nenhuma credencial Firebase configurada! Veja as opções acima.")
 
         # Inicializa o app com as opções
         options = {"projectId": settings.firebase_project_id}
         firebase_admin.initialize_app(cred, options)
 
-        print(f"[FIREBASE] ✅ Firebase Admin SDK inicializado!")
+        print(f"[FIREBASE] ✅ Firebase Admin SDK inicializado com sucesso!")
         print(f"[FIREBASE] Project ID ativo: {settings.firebase_project_id}")
         print(f"{'='*60}\n")
         
