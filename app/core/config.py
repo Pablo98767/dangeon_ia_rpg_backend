@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     firebase_project_id: str = Field(..., alias="FIREBASE_PROJECT_ID")
     firebase_api_key: str = Field(..., alias="FIREBASE_API_KEY")
     firebase_credentials_file: str | None = Field(None, alias="FIREBASE_CREDENTIALS_FILE")
+    firebase_credentials_json: str | None = Field(None, alias="FIREBASE_CREDENTIALS_JSON")
     firebase_client_email: str | None = Field(None, alias="FIREBASE_CLIENT_EMAIL")
     firebase_private_key: str | None = Field(None, alias="FIREBASE_PRIVATE_KEY")
     
