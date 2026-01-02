@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
 from app.deps.auth import firebase_current_user
 from app.services.coins_service import coins_service
-from app.services.stripe_service import stripe_service  # ← IMPORTANTE
+from app.services.stripe_service import stripe_service
 from app.models.coins import (
     CoinBalanceResponse,
     CoinTransaction,
@@ -56,19 +56,35 @@ async def purchase_coin_package(
     """
     Inicia o processo de compra de um pacote de moedas via Stripe
     """
+    print(f"\n{'='*80}")
+    print(f"[PURCHASE] 🛒 Nova solicitação de compra")
+    print(f"{'='*80}")
+    
     user_id = user["uid"]
     user_email = user.get("email")
+    
+    print(f"[PURCHASE] User ID: {user_id}")
+    print(f"[PURCHASE] User Email: {user_email}")
+    print(f"[PURCHASE] Package ID solicitado: {request.package_id}")
     
     # Busca o pacote
     package = coins_service.get_package_by_id(request.package_id)
     if not package:
+        print(f"[PURCHASE] ❌ Pacote não encontrado: {request.package_id}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Pacote não encontrado"
         )
     
-    # ============ INTEGRAÇÃO COM STRIPE (CÓDIGO ATUALIZADO) ============
+    print(f"[PURCHASE] ✅ Pacote encontrado:")
+    print(f"  - Nome: {package.name}")
+    print(f"  - Moedas: {package.coins}")
+    print(f"  - Preço: R$ {package.price_brl}")
+    
+    # ============ INTEGRAÇÃO COM STRIPE ============
     try:
+        print(f"\n[PURCHASE] 💳 Criando sessão de checkout no Stripe...")
+        
         # Cria sessão de checkout no Stripe
         checkout_data = stripe_service.create_checkout_session(
             package=package,
@@ -76,15 +92,32 @@ async def purchase_coin_package(
             user_email=user_email
         )
         
+        print(f"[PURCHASE] ✅ Checkout criado com sucesso!")
+        print(f"  - Session ID: {checkout_data['session_id']}")
+        print(f"  - Checkout URL: {checkout_data['checkout_url'][:50]}...")
+        
+        # Pega saldo atual
+        current_balance = (await coins_service.get_user_balance(user_id)).balance
+        print(f"[PURCHASE] Saldo atual do usuário: {current_balance}")
+        
+        print(f"[PURCHASE] ⚠️ Moedas serão adicionadas APÓS confirmação do webhook")
+        print(f"{'='*80}\n")
+        
         return PurchasePackageResponse(
             transaction_id=checkout_data['session_id'],
             coins_added=0,  # Moedas serão adicionadas após confirmação do webhook
-            new_balance=(await coins_service.get_user_balance(user_id)).balance,
+            new_balance=current_balance,
             payment_url=checkout_data['checkout_url']
         )
         
     except Exception as e:
-        print(f"[STRIPE] Erro ao criar checkout: {e}")
+        print(f"\n[PURCHASE] ❌ ERRO ao criar checkout:")
+        print(f"  - Tipo: {type(e).__name__}")
+        print(f"  - Mensagem: {str(e)}")
+        import traceback
+        print(f"  - Traceback: {traceback.format_exc()}")
+        print(f"{'='*80}\n")
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro ao criar sessão de pagamento: {str(e)}"
@@ -108,18 +141,27 @@ async def admin_add_coins(
 ):
     """
     Endpoint administrativo para adicionar moedas manualmente
-    (útil para testes ou bônus promocionais)
     """
-    # TODO: Adicionar verificação de admin role
+    print(f"\n[ADMIN] 🔧 Adicionando moedas manualmente:")
+    print(f"  - User ID: {user_id}")
+    print(f"  - Amount: {amount}")
+    print(f"  - Description: {description}")
     
-    updated_coins = await coins_service.add_coins(
-        user_id=user_id,
-        amount=amount,
-        transaction_type="purchase",
-        description=description
-    )
-    
-    return {
-        "message": f"{amount} moedas adicionadas com sucesso",
-        "new_balance": updated_coins.balance
-    }
+    try:
+        updated_coins = await coins_service.add_coins(
+            user_id=user_id,
+            amount=amount,
+            transaction_type="admin_bonus",
+            description=description
+        )
+        
+        print(f"[ADMIN] ✅ Moedas adicionadas!")
+        print(f"  - Novo saldo: {updated_coins.balance}\n")
+        
+        return {
+            "message": f"{amount} moedas adicionadas com sucesso",
+            "new_balance": updated_coins.balance
+        }
+    except Exception as e:
+        print(f"[ADMIN] ❌ Erro: {e}\n")
+        raise
