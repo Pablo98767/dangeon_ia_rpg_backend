@@ -148,7 +148,7 @@ class CoinsService:
         return user_coins
 
     # =========================================================
-    # Crédito (COMPRA)
+    # Crédito (COMPRA) - 🔥 CORRIGIDO
     # =========================================================
     async def add_coins(
         self,
@@ -158,19 +158,31 @@ class CoinsService:
         description: str,
         reference_id: Optional[str] = None
     ) -> UserCoins:
-
-        user_coins = await self.get_user_balance(user_id)
+        
+        print(f"\n[COINS_SERVICE] Iniciando add_coins:")
+        print(f"  - user_id: {user_id}")
+        print(f"  - amount: {amount}")
+        print(f"  - reference_id: {reference_id}")
 
         # 🔒 Proteção contra duplicidade (webhook / retry)
         if reference_id:
-            existing = (
+            existing_docs = list(
                 self.transactions_ref
                 .where(filter=FieldFilter("reference_id", "==", reference_id))
                 .limit(1)
                 .stream()
             )
-            if any(existing):
-                return user_coins
+            
+            if existing_docs:
+                print(f"[COINS_SERVICE] ⚠️ Transação duplicada detectada! reference_id: {reference_id}")
+                # 🔥 FIX: Retorna o saldo ATUAL do usuário, não o antigo
+                user_coins_updated = await self.get_user_balance(user_id)
+                print(f"[COINS_SERVICE] Saldo atual do usuário: {user_coins_updated.balance}")
+                return user_coins_updated
+
+        # Busca saldo atual
+        user_coins = await self.get_user_balance(user_id)
+        print(f"[COINS_SERVICE] Saldo ANTES: {user_coins.balance}")
 
         new_balance = user_coins.balance + amount
 
@@ -179,19 +191,31 @@ class CoinsService:
         user_coins.last_transaction_at = datetime.utcnow()
         user_coins.updated_at = datetime.utcnow()
 
-        self.users_coins_ref.document(user_id).set(
-            user_coins.model_dump(),
-            merge=True
-        )
+        # 🔥 Salvando no Firestore com try/catch
+        try:
+            self.users_coins_ref.document(user_id).set(
+                user_coins.model_dump(),
+                merge=True
+            )
+            print(f"[COINS_SERVICE] ✅ Firestore atualizado! Novo saldo: {new_balance}")
+        except Exception as e:
+            print(f"[COINS_SERVICE] ❌ ERRO ao salvar no Firestore: {e}")
+            raise
 
-        await self._create_transaction(
-            user_id=user_id,
-            amount=amount,
-            transaction_type=transaction_type,
-            description=description,
-            reference_id=reference_id,
-            balance_after=new_balance
-        )
+        # Cria transação
+        try:
+            await self._create_transaction(
+                user_id=user_id,
+                amount=amount,
+                transaction_type=transaction_type,
+                description=description,
+                reference_id=reference_id,
+                balance_after=new_balance
+            )
+            print(f"[COINS_SERVICE] ✅ Transação criada com sucesso")
+        except Exception as e:
+            print(f"[COINS_SERVICE] ❌ ERRO ao criar transação: {e}")
+            raise
 
         return user_coins
 
