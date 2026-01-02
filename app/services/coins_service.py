@@ -1,23 +1,30 @@
 from datetime import datetime
 from typing import Optional, List
 import uuid
+
 from google.cloud.firestore_v1 import FieldFilter
+
 from app.models.coins import (
-    CoinTransaction, 
-    UserCoins, 
+    CoinTransaction,
+    UserCoins,
     CoinPackage,
     InsufficientCoinsError
 )
-# ============ CORREÇÃO AQUI ============
-from app.services.firebase_admin_svc import firestore_client
-# =======================================
 
+from app.services.firebase_admin_svc import firestore_client
+
+
+# =======================
 # Constantes
+# =======================
 INITIAL_BONUS_COINS = 50
 STORY_CREATION_COST = 5
 CHOICE_COST = 5
 
+
+# =======================
 # Pacotes disponíveis
+# =======================
 COIN_PACKAGES = [
     CoinPackage(
         package_id="pack_100",
@@ -42,36 +49,38 @@ COIN_PACKAGES = [
     )
 ]
 
+
 class CoinsService:
     def __init__(self):
-        # ============ CORREÇÃO AQUI ============
         self.db = firestore_client()
-        # =======================================
         self.users_coins_ref = self.db.collection("user_coins")
         self.transactions_ref = self.db.collection("coin_transactions")
-    
+
+    # =========================================================
+    # Inicialização segura (idempotente)
+    # =========================================================
     async def initialize_user_coins(self, user_id: str) -> UserCoins:
-        """
-        Inicializa moedas para um novo usuário com bônus inicial
-        """
-        user_coins_doc = self.users_coins_ref.document(user_id)
-        
-        # Verifica se já existe
-        if user_coins_doc.get().exists:
-            return await self.get_user_balance(user_id)
-        
-        # Cria registro de moedas
+        user_doc_ref = self.users_coins_ref.document(user_id)
+        doc = user_doc_ref.get()
+
+        if doc.exists:
+            return UserCoins(**doc.to_dict())
+
         user_coins = UserCoins(
             user_id=user_id,
             balance=INITIAL_BONUS_COINS,
             total_earned=INITIAL_BONUS_COINS,
             total_spent=0,
-            last_transaction_at=datetime.utcnow()
+            last_transaction_at=datetime.utcnow(),
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
         )
-        
-        user_coins_doc.set(user_coins.model_dump())
-        
-        # Registra transação de bônus inicial
+
+        user_doc_ref.set(
+            user_coins.model_dump(),
+            merge=True
+        )
+
         await self._create_transaction(
             user_id=user_id,
             amount=INITIAL_BONUS_COINS,
@@ -79,54 +88,54 @@ class CoinsService:
             description="Bônus de boas-vindas",
             balance_after=INITIAL_BONUS_COINS
         )
-        
+
         return user_coins
-    
+
+    # =========================================================
+    # Saldo
+    # =========================================================
     async def get_user_balance(self, user_id: str) -> UserCoins:
-        """
-        Retorna o saldo de moedas do usuário
-        """
         doc = self.users_coins_ref.document(user_id).get()
-        
+
         if not doc.exists:
-            # Se não existir, inicializa com bônus
             return await self.initialize_user_coins(user_id)
-        
+
         return UserCoins(**doc.to_dict())
-    
+
     async def has_sufficient_coins(self, user_id: str, required_coins: int) -> bool:
-        """
-        Verifica se usuário tem moedas suficientes
-        """
         user_coins = await self.get_user_balance(user_id)
         return user_coins.balance >= required_coins
-    
+
+    # =========================================================
+    # Débito
+    # =========================================================
     async def deduct_coins(
-        self, 
-        user_id: str, 
-        amount: int, 
+        self,
+        user_id: str,
+        amount: int,
         description: str,
         reference_id: Optional[str] = None
     ) -> UserCoins:
-        """
-        Deduz moedas do saldo do usuário
-        """
+
         user_coins = await self.get_user_balance(user_id)
-        
+
         if user_coins.balance < amount:
-            raise ValueError(f"Saldo insuficiente. Você possui {user_coins.balance} moedas, mas precisa de {amount}.")
-        
-        # Atualiza saldo
+            raise InsufficientCoinsError(
+                f"Saldo insuficiente. Possui {user_coins.balance}, precisa de {amount}."
+            )
+
         new_balance = user_coins.balance - amount
+
         user_coins.balance = new_balance
         user_coins.total_spent += amount
         user_coins.last_transaction_at = datetime.utcnow()
         user_coins.updated_at = datetime.utcnow()
-        
-        # Salva no Firestore
-        self.users_coins_ref.document(user_id).set(user_coins.model_dump())
-        
-        # Registra transação
+
+        self.users_coins_ref.document(user_id).set(
+            user_coins.model_dump(),
+            merge=True
+        )
+
         await self._create_transaction(
             user_id=user_id,
             amount=-amount,
@@ -135,33 +144,46 @@ class CoinsService:
             reference_id=reference_id,
             balance_after=new_balance
         )
-        
+
         return user_coins
-    
+
+    # =========================================================
+    # Crédito (COMPRA)
+    # =========================================================
     async def add_coins(
-        self, 
-        user_id: str, 
-        amount: int, 
+        self,
+        user_id: str,
+        amount: int,
         transaction_type: str,
         description: str,
         reference_id: Optional[str] = None
     ) -> UserCoins:
-        """
-        Adiciona moedas ao saldo do usuário
-        """
+
         user_coins = await self.get_user_balance(user_id)
-        
-        # Atualiza saldo
+
+        # 🔒 Proteção contra duplicidade (webhook / retry)
+        if reference_id:
+            existing = (
+                self.transactions_ref
+                .where(filter=FieldFilter("reference_id", "==", reference_id))
+                .limit(1)
+                .stream()
+            )
+            if any(existing):
+                return user_coins
+
         new_balance = user_coins.balance + amount
+
         user_coins.balance = new_balance
         user_coins.total_earned += amount
         user_coins.last_transaction_at = datetime.utcnow()
         user_coins.updated_at = datetime.utcnow()
-        
-        # Salva no Firestore
-        self.users_coins_ref.document(user_id).set(user_coins.model_dump())
-        
-        # Registra transação
+
+        self.users_coins_ref.document(user_id).set(
+            user_coins.model_dump(),
+            merge=True
+        )
+
         await self._create_transaction(
             user_id=user_id,
             amount=amount,
@@ -170,9 +192,12 @@ class CoinsService:
             reference_id=reference_id,
             balance_after=new_balance
         )
-        
+
         return user_coins
-    
+
+    # =========================================================
+    # Transações
+    # =========================================================
     async def _create_transaction(
         self,
         user_id: str,
@@ -182,9 +207,6 @@ class CoinsService:
         balance_after: int,
         reference_id: Optional[str] = None
     ):
-        """
-        Registra uma transação de moedas
-        """
         transaction = CoinTransaction(
             transaction_id=str(uuid.uuid4()),
             user_id=user_id,
@@ -192,46 +214,43 @@ class CoinsService:
             balance_after=balance_after,
             transaction_type=transaction_type,
             description=description,
-            reference_id=reference_id
+            reference_id=reference_id,
+            created_at=datetime.utcnow()
         )
-        
+
         self.transactions_ref.document(transaction.transaction_id).set(
-            transaction.model_dump()
+            transaction.model_dump(),
+            merge=True
         )
-    
+
     async def get_user_transactions(
-        self, 
-        user_id: str, 
+        self,
+        user_id: str,
         limit: int = 50
     ) -> List[CoinTransaction]:
-        """
-        Retorna histórico de transações do usuário
-        """
+
         query = (
             self.transactions_ref
             .where(filter=FieldFilter("user_id", "==", user_id))
             .order_by("created_at", direction="DESCENDING")
             .limit(limit)
         )
-        
+
         docs = query.stream()
         return [CoinTransaction(**doc.to_dict()) for doc in docs]
-    
+
+    # =========================================================
+    # Pacotes
+    # =========================================================
     def get_available_packages(self) -> List[CoinPackage]:
-        """
-        Retorna pacotes de moedas disponíveis
-        """
         return [pkg for pkg in COIN_PACKAGES if pkg.is_active]
-    
+
     def get_package_by_id(self, package_id: str) -> Optional[CoinPackage]:
-        """
-        Retorna um pacote específico por ID
-        """
         for pkg in COIN_PACKAGES:
             if pkg.package_id == package_id:
                 return pkg
         return None
 
 
-# Instância global do serviço
+# Instância global
 coins_service = CoinsService()
