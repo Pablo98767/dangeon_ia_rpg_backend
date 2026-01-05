@@ -11,30 +11,100 @@ SITE_URL = os.getenv("OPENROUTER_SITE_URL", "http://localhost:8000")
 SITE_NAME = os.getenv("OPENROUTER_SITE_NAME", "RPG-IA-Backend")
 API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-# 🚀 MODELO ATUALIZADO: GPT-4o-mini (muito mais poderoso!)
 MODEL = "openai/gpt-4o-mini"
 
 # ==========================================
-# SYSTEM PROMPT OTIMIZADO
+# SYSTEM PROMPT OTIMIZADO V2
 # ==========================================
 SYSTEM_PROMPT = """
-Você é um narrador de histórias interativas de RPG extremamente criativo e envolvente.
-Responda SEMPRE em JSON estrito, no formato:
+Você é um NARRADOR DE RPG INTERATIVO, responsável por conduzir uma história dinâmica, coerente e consequente.
+Você NÃO é apenas um escritor.
+Você é um GERENCIADOR DE ESTADO DE JOGO.
+Responda SEMPRE e EXCLUSIVAMENTE em JSON válido.
+NUNCA escreva texto fora do JSON.
+NUNCA use markdown.
+NUNCA explique regras ao jogador.
+
+========================
+ESTRUTURA OBRIGATÓRIA
+========================
 {
-  "text": "trecho da história em português",
-  "choices": ["opção 1", "opção 2", "opção 3", "opção 4"]
+  "scene": {
+    "type": "narrative | combat | decision | consequence | ending",
+    "description": "descrição narrativa imersiva da cena (150–300 palavras)",
+    "tone": "sombrio | épico | tenso | misterioso | trágico | heroico"
+  },
+  "game_state": {
+    "player": {
+      "hp": número inteiro (0 a 100),
+      "status": ["normal", "ferido", "exausto", "em perigo", "morto"]
+    }
+  },
+  "mechanics": {
+    "danger_level": 1 a 5,
+    "expected_damage": número inteiro (0 se não houver risco),
+    "notes": "resumo curto da consequência mecânica da cena"
+  },
+  "choices": [
+    {
+      "id": "A",
+      "label": "texto curto da escolha",
+      "risk": "baixo | médio | alto"
+    },
+    {
+      "id": "B",
+      "label": "texto curto da escolha",
+      "risk": "baixo | médio | alto"
+    }
+  ]
 }
 
-REGRAS IMPORTANTES:
-- "text": Deve conter uma narrativa envolvente, descritiva e imersiva (200-400 palavras)
-- "choices": Deve ter entre 2 e 4 opções curtas, claras e mutuamente exclusivas
-- Nunca inclua comentários fora do JSON. Nunca use markdown. Apenas JSON puro.
-- Mantenha a coerência da história, personagens consistentes e lógica interna impecável
-- Crie histórias com início, desenvolvimento e conclusões épicas
-- Use elementos dramáticos, reviravoltas e momentos emocionantes
-- Adapte-se ao tom e tema escolhido pelo jogador
+========================
+REGRAS NARRATIVAS
+========================
+- A história DEVE ser contínua e lembrar das decisões anteriores.
+- NUNCA ofereça escolhas que contradigam decisões já tomadas.
+- Cada cena deve avançar a história de forma clara.
+- Escolhas DEVEM ter consequências reais.
+- Evite loops narrativos.
+- Mantenha personagens, ambiente e tom consistentes.
 
-IMPORTANTE: Responda APENAS com o objeto JSON, sem nenhum texto adicional antes ou depois.
+========================
+REGRAS DE COMBATE
+========================
+- Combate é uma CENA, não um sistema separado.
+- Quando scene.type for "combat":
+  - danger_level define a gravidade do inimigo ou ameaça.
+  - expected_damage deve ser coerente com o perigo.
+  - O jogador SEMPRE corre risco.
+- Dano é aplicado pelo backend, não pelo texto.
+- Se hp chegar a 0:
+  - status deve incluir "morto"
+  - scene.type deve ser "ending"
+
+========================
+REGRAS DE ESCOLHAS
+========================
+- Mínimo: 2 escolhas
+- Máximo: 4 escolhas
+- Escolhas devem ser:
+  - curtas
+  - mutuamente exclusivas
+  - coerentes com a cena
+- Cada escolha deve refletir claramente seu risco.
+
+========================
+REGRAS FINAIS
+========================
+- NÃO gere imagens.
+- NÃO mencione sistemas, números ou cálculos no texto narrativo.
+- NÃO repita escolhas anteriores.
+- NÃO reinicie a história.
+- A história deve ter começo, meio e fim possíveis.
+
+IMPORTANTE:
+Responda APENAS com o objeto JSON.
+Nenhum texto antes ou depois.
 """
 
 # ==========================================
@@ -78,17 +148,17 @@ def _extract_last_json_object(text: str) -> Optional[str]:
     return last_obj
 
 
-def _parse_json_strict(content: str) -> Dict:
+def _parse_json_strict(content: str, current_hp: int = 100) -> Dict:
     """
-    Tenta fazer o parse do JSON de forma inteligente.
+    Tenta fazer o parse do JSON de forma inteligente com a nova estrutura.
     Primeiro tenta parse direto, depois procura por objeto JSON,
-    e por último retorna fallback com escolhas padrão.
+    e por último retorna fallback com estrutura completa.
     """
     # Tentativa 1: Parse direto
     try:
         data = json.loads(content)
-        if isinstance(data, dict) and "text" in data and isinstance(data.get("choices"), list):
-            return data
+        if isinstance(data, dict) and "scene" in data and "choices" in data:
+            return _validate_and_normalize(data, current_hp)
     except Exception:
         pass
 
@@ -97,26 +167,113 @@ def _parse_json_strict(content: str) -> Dict:
     if blob:
         try:
             data = json.loads(blob)
-            if isinstance(data, dict) and "text" in data and isinstance(data.get("choices"), list):
-                return data
+            if isinstance(data, dict) and "scene" in data and "choices" in data:
+                return _validate_and_normalize(data, current_hp)
         except Exception:
             pass
 
-    # Fallback: Retorna o texto completo com escolhas padrão
+    # Fallback: Retorna estrutura completa com o conteúdo como descrição
     return {
-        "text": content.strip(),
-        "choices": ["Seguir adiante", "Recuar com cautela", "Investigar ao redor"]
+        "text": content.strip()[:500],
+        "choices": ["Seguir adiante", "Investigar ao redor", "Recuar com cautela"],
+        "scene_type": "narrative",
+        "scene_tone": "misterioso",
+        "game_state": {
+            "player": {"hp": current_hp, "status": ["normal"]}
+        },
+        "mechanics": {
+            "danger_level": 1,
+            "expected_damage": 0,
+            "notes": "Cena narrativa padrão"
+        }
+    }
+
+
+def _validate_and_normalize(data: Dict, current_hp: int = 100) -> Dict:
+    """
+    Valida e normaliza a estrutura JSON retornada pela IA.
+    🔥 CONVERTE CHOICES PARA STRINGS IMEDIATAMENTE 🔥
+    """
+    # Validar scene
+    if "scene" not in data or not isinstance(data["scene"], dict):
+        data["scene"] = {"type": "narrative", "description": "", "tone": "misterioso"}
+    
+    scene = data["scene"]
+    scene_type = scene.get("type", "narrative")
+    scene_description = scene.get("description", "")[:500]
+    scene_tone = scene.get("tone", "misterioso")
+    
+    # Validar game_state
+    if "game_state" not in data or not isinstance(data["game_state"], dict):
+        data["game_state"] = {"player": {}}
+    
+    if "player" not in data["game_state"] or not isinstance(data["game_state"]["player"], dict):
+        data["game_state"]["player"] = {}
+    
+    player = data["game_state"]["player"]
+    player["hp"] = max(0, min(100, player.get("hp", current_hp)))
+    
+    status = player.get("status", [])
+    if not isinstance(status, list) or not status:
+        status = ["normal"]
+    player["status"] = status
+    
+    # Se HP = 0, forçar status "morto" e type "ending"
+    if player["hp"] == 0:
+        if "morto" not in player["status"]:
+            player["status"].append("morto")
+        scene_type = "ending"
+    
+    # Validar mechanics
+    if "mechanics" not in data or not isinstance(data["mechanics"], dict):
+        data["mechanics"] = {}
+    
+    mechanics = data["mechanics"]
+    mechanics["danger_level"] = max(1, min(5, mechanics.get("danger_level", 1)))
+    mechanics["expected_damage"] = max(0, mechanics.get("expected_damage", 0))
+    mechanics["notes"] = mechanics.get("notes", "")[:200]
+    
+    # 🔥 CONVERSÃO IMEDIATA: choices de dict para string 🔥
+    raw_choices = data.get("choices", [])
+    if not isinstance(raw_choices, list) or len(raw_choices) < 2:
+        raw_choices = [
+            {"label": "Seguir adiante"},
+            {"label": "Investigar ao redor"}
+        ]
+    elif len(raw_choices) > 4:
+        raw_choices = raw_choices[:4]
+    
+    # Extrair apenas os labels (strings)
+    choices_strings = []
+    for choice in raw_choices:
+        if isinstance(choice, dict):
+            label = choice.get("label", "")
+            if label:
+                choices_strings.append(label[:100])
+            else:
+                choices_strings.append("Opção desconhecida")
+        else:
+            choices_strings.append(str(choice)[:100])
+    
+    # Retornar estrutura normalizada COM CHOICES COMO STRINGS
+    return {
+        "text": scene_description,
+        "choices": choices_strings,  # ✅ JÁ SÃO STRINGS AQUI
+        "scene_type": scene_type,
+        "scene_tone": scene_tone,
+        "game_state": data["game_state"],
+        "mechanics": mechanics,
     }
 
 
 # ==========================================
-# FUNÇÃO DE CHAMADA À IA (GPT-4o-mini)
+# FUNÇÃO DE CHAMADA À IA
 # ==========================================
 
-async def _chat_once(user_prompt: str) -> Dict:
+async def _chat_once(user_prompt: str, current_hp: int = 100) -> Dict:
     """
     Faz uma chamada única à API da OpenRouter usando GPT-4o-mini.
-    Retorna um dicionário com 'text' e 'choices'.
+    Retorna um dicionário com choices JÁ CONVERTIDAS PARA STRINGS.
     """
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
@@ -134,8 +291,8 @@ async def _chat_once(user_prompt: str) -> Dict:
                         {"role": "system", "content": SYSTEM_PROMPT},
                         {"role": "user", "content": user_prompt}
                     ],
-                    "temperature": 0.8,  # Criatividade balanceada
-                    "max_tokens": 800,   # Permite respostas mais elaboradas
+                    "temperature": 0.8,
+                    "max_tokens": 1000,
                 }
             )
         except httpx.TimeoutException:
@@ -149,24 +306,13 @@ async def _chat_once(user_prompt: str) -> Dict:
             detail=f"Erro ao chamar IA: {response.status_code} - {response.text}"
         )
 
-    # Parse da resposta
     response_data = response.json()
     content = response_data["choices"][0]["message"]["content"]
     
-    # Parse inteligente do JSON
-    data = _parse_json_strict(content)
+    # Parse retorna choices JÁ COMO STRINGS
+    data = _parse_json_strict(content, current_hp)
     
-    # Validação e normalização das escolhas
-    choices = data.get("choices") or []
-    if len(choices) < 2:
-        choices = ["Seguir adiante", "Recuar com cautela", "Investigar ao redor"]
-    elif len(choices) > 4:
-        choices = choices[:4]
-    
-    return {
-        "text": (data.get("text") or "").strip(),
-        "choices": choices
-    }
+    return data
 
 
 # ==========================================
@@ -182,28 +328,43 @@ async def generate_next_step(
     """
     Gera o próximo passo da história baseado no tema, personagem e histórico.
     
-    Args:
-        theme: Tema/gênero da história (fantasia, sci-fi, terror, etc)
-        character: Descrição do personagem principal
-        history: Lista de eventos anteriores da história
-        max_choices: Número máximo de escolhas (2-4)
-    
     Returns:
-        Dict com: index, text, choices, model
+        Dict com: index, text, choices (List[str]), model
     """
     
-    # Construir resumo do histórico (últimas 3 interações)
+    # Obter HP atual do último estado
+    current_hp = 100
+    current_status = ["normal"]
+    
+    if history:
+        last_state = history[-1].get("game_state", {}).get("player", {})
+        current_hp = last_state.get("hp", 100)
+        current_status = last_state.get("status", ["normal"])
+    
+    # Construir resumo do histórico
     recap = ""
     if history:
-        recap = "📜 RESUMO DOS EVENTOS RECENTES:\n"
-        for h in history[-3:]:
+        recap = "📜 CONTEXTO DA HISTÓRIA:\n"
+        recap += f"🩸 HP Atual: {current_hp}/100\n"
+        recap += f"⚡ Status: {', '.join(current_status)}\n\n"
+        recap += "🎬 EVENTOS RECENTES:\n"
+        
+        for h in history[-5:]:
+            scene_type = h.get("scene_type", "narrative")
+            description = h.get("text", "")[:200]
             chosen_idx = h.get("chosen_index")
-            tag = "" if chosen_idx is None else f" [Escolha: {chosen_idx + 1}]"
-            recap += f"• {h['text'][:250]}{tag}\n"
+            chosen_label = ""
+            
+            if chosen_idx is not None and "choices" in h:
+                choices = h.get("choices", [])
+                if isinstance(choices, list) and chosen_idx < len(choices):
+                    chosen_label = f" → Escolha: '{choices[chosen_idx]}'"
+            
+            recap += f"• [{scene_type.upper()}] {description}{chosen_label}\n"
     
-    # Construir prompt para a IA
+    # Construir prompt
     user_prompt = f"""
-🎮 GERAÇÃO DE HISTÓRIA INTERATIVA
+🎮 GERAÇÃO DE PRÓXIMA CENA DO RPG
 
 📖 TEMA: {theme}
 👤 PERSONAGEM: {character}
@@ -211,35 +372,50 @@ async def generate_next_step(
 {recap}
 
 🎯 TAREFA:
-Gere o próximo trecho emocionante da história com no máximo {max_choices} escolhas de ação.
+Gere a próxima cena da história considerando TUDO que aconteceu até agora.
+
+IMPORTANTE:
+- Mantenha continuidade total com os eventos anteriores
+- Aplique as consequências das escolhas passadas
+- Crie escolhas que façam sentido no contexto atual
+- Mantenha o HP e status do personagem coerentes
+- Se o personagem está ferido ou exausto, reflita isso na narrativa
+- Avance a história de forma significativa
+- Máximo de {max_choices} escolhas
 
 LEMBRE-SE:
-- Crie uma narrativa envolvente e imersiva
-- As escolhas devem ser interessantes e impactantes
-- Mantenha a coerência com os eventos anteriores
-- Responda APENAS com JSON no formato especificado
+- NÃO repita escolhas já feitas
+- NÃO ignore consequências anteriores
+- NÃO crie loops narrativos
+- Responda APENAS com o JSON no formato especificado
 """
 
-    # Calcular o índice do próximo passo
     last_index = history[-1]["index"] + 1 if history else 0
 
     try:
-        # Chamada à IA
-        result = await _chat_once(user_prompt)
+        # Chamada à IA (já retorna choices como strings)
+        result = await _chat_once(user_prompt, current_hp)
         
-        # Normalizar número de escolhas
-        result["choices"] = (result["choices"] or [])[:max(2, min(4, max_choices))]
+        # Garantir máximo de escolhas
+        if len(result["choices"]) > max_choices:
+            result["choices"] = result["choices"][:max_choices]
         
-        # Retornar resposta estruturada
+        # Retornar resposta compatível com Pydantic
         return {
             "index": last_index,
             "text": result["text"],
-            "choices": result["choices"],
+            "choices": result["choices"],  # ✅ JÁ SÃO STRINGS
             "model": MODEL,
+            
+            # Campos extras opcionais
+            "scene_type": result.get("scene_type", "narrative"),
+            "scene_tone": result.get("scene_tone", "misterioso"),
+            "game_state": result.get("game_state", {"player": {"hp": current_hp, "status": current_status}}),
+            "mechanics": result.get("mechanics", {"danger_level": 1, "expected_damage": 0, "notes": ""}),
         }
         
     except HTTPException:
-        raise  # Re-lança HTTPExceptions
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=503, 
@@ -248,13 +424,11 @@ LEMBRE-SE:
 
 
 # ==========================================
-# INFORMAÇÕES DO MODELO (para logging/debug)
+# INFORMAÇÕES DO MODELO
 # ==========================================
 
 def get_model_info() -> Dict:
-    """
-    Retorna informações sobre o modelo atual.
-    """
+    """Retorna informações sobre o modelo atual."""
     return {
         "model": MODEL,
         "provider": "OpenRouter",
@@ -263,5 +437,11 @@ def get_model_info() -> Dict:
         "pricing": {
             "input": "$0.15 per 1M tokens",
             "output": "$0.60 per 1M tokens"
+        },
+        "features": {
+            "game_state_management": True,
+            "combat_system": True,
+            "consequence_tracking": True,
+            "dynamic_difficulty": True
         }
     }

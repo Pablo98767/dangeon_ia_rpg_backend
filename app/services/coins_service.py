@@ -30,7 +30,7 @@ COIN_PACKAGES = [
         package_id="pack_100",
         name="Pacote Iniciante",
         coins=100,
-        price_brl=1.00,
+        price_brl=6.00,
         discount_percentage=None
     ),
     CoinPackage(
