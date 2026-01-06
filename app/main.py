@@ -17,10 +17,13 @@ def create_app() -> FastAPI:
             "http://localhost:3000",      # React dev server
             "http://127.0.0.1:3000",      # React dev server alternativo
             "https://dungeon-generator-frontend.onrender.com", # frontend em produção
+            "https://dungeon-ia-master.lovable.app"
+            
         ],
         allow_credentials=True,
         allow_methods=["*"],              # Permite todos os métodos (GET, POST, OPTIONS, etc)
         allow_headers=["*"],              # Permite todos os headers
+        allow_origin_regex=r"https://.*\.lovable\.app", # Permite qualquer app vindo do lovable
     )
 
     @app.get("/")
