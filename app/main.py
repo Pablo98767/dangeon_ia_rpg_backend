@@ -11,19 +11,23 @@ def create_app() -> FastAPI:
     app = FastAPI(title=settings.app_name)
 
     # Configurar CORS para permitir requisições do frontend
+    app = FastAPI(title=settings.app_name)
+
+    # Configuração de CORS simplificada e potente para desenvolvimento
     app.add_middleware(
         CORSMiddleware,
+        # Usar ["*"] com allow_credentials=True pode causar erro em alguns browsers.
+        # Para testes, é melhor listar ou usar a regex de forma limpa.
         allow_origins=[
-            "http://localhost:3000",      # React dev server
-            "http://127.0.0.1:3000",      # React dev server alternativo
-            "https://dungeon-generator-frontend.onrender.com", # frontend em produção
-            "https://dungeon-ia-master.lovable.app"
-            
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "https://dungeon-generator-frontend.onrender.com",
+            "https://dungeon-ia-master.lovable.app",
         ],
+        allow_origin_regex=r"https://.*\.lovable\.app|https://.*\.gptengineer\.run",
         allow_credentials=True,
-        allow_methods=["*"],              # Permite todos os métodos (GET, POST, OPTIONS, etc)
-        allow_headers=["*"],              # Permite todos os headers
-        allow_origin_regex=r"https://.*\.lovable\.app", # Permite qualquer app vindo do lovable
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     @app.get("/")
