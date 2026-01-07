@@ -7,12 +7,6 @@ from app.routers import pix
 from app.routers import coins
 from app.routers import webhooks  # ← ADICIONE ESTE IMPORT
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from app.core.config import settings
-from app.routers import health, auth, users, stories, pix, coins, webhooks
 
 def create_app() -> FastAPI:
     # 1. Instância única do FastAPI
