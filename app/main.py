@@ -21,7 +21,7 @@ def create_app() -> FastAPI:
             "https://dungeon-ia-master.lovable.app",
             "https://dungeon-generator.lovable.app",
         ],
-        allow_origin_regex=r"https://.*\.lovable\.app|https://.*\.gptengineer\.run",
+        allow_origin_regex=r"https://.*\.lovable\.app|https://.*\.lovableproject\.com|https://.*\.gptengineer\.run",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
