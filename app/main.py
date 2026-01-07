@@ -9,23 +9,20 @@ from app.routers import webhooks  # ← ADICIONE ESTE IMPORT
 
 def create_app() -> FastAPI:
     # 1. Removida a duplicidade: declaramos o app apenas uma vez
-    app = FastAPI(title=settings.app_name)
-
-    # 2. Configuração de CORS otimizada
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=[
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            "https://dungeon-generator-frontend.onrender.com",
-            "https://dungeon-ia-master.lovable.app",
-        ],
-        # Adicionado parênteses na regex para garantir que pegue ambos os domínios corretamente
-        allow_origin_regex=r"https://.*\.lovable\.app|https://.*\.gptengineer\.run",
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+app.add_middleware(
+    CORSMiddleware,
+    # Em vez de misturar os dois, vamos focar no que funciona para o navegador
+    allow_origins=[
+        "http://localhost:3000",
+        "https://dungeon-generator-frontend.onrender.com",
+        "https://dungeon-ia-master.lovable.app",
+    ],
+    # A regex deve ser usada apenas se o allow_origins não for suficiente
+    allow_origin_regex=r"https://.*\.lovable\.app|https://.*\.gptengineer\.run",
+    allow_credentials=True,
+    allow_methods=["*"],  # Garante que OPTIONS, POST, GET sejam aceitos
+    allow_headers=["*"],  # Garante que Authorization e Content-Type sejam aceitos
+)
 
 
     @app.get("/")
