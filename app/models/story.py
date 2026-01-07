@@ -42,4 +42,13 @@ class StorySummaryOut(BaseModel):
     last_text: Optional[str] = None
 
 
-    
+class StepOut(BaseModel):
+    story_id: str
+    step_id: str
+    index: int
+    text: str
+    choices: List[str]
+    created_at: datetime
+
+    # 🔥 NOVO CAMPO (opcional, não quebra nada)
+    state: Optional[Dict[str, Any]] = None

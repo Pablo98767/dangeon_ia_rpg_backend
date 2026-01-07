@@ -5,21 +5,35 @@ from app.routers import health, auth, users
 from app.routers import stories
 from app.routers import pix
 from app.routers import coins
-from app.routers import webhooks  # ← ADICIONE ESTE IMPORT
+from app.routers import webhooks
+
 
 def create_app() -> FastAPI:
     app = FastAPI(title=settings.app_name)
 
-    # Configurar CORS para permitir requisições do frontend
+    # ============================================
+    # CONFIGURAÇÃO CORS CORRIGIDA ✅
+    # ============================================
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
-            "http://localhost:3000",      # React dev server
-            "http://127.0.0.1:3000",      # React dev server alternativo
-            "https://dungeon-generator-frontend.onrender.com", # frontend em produção
+            # Desenvolvimento - React (Create React App)
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            
+            # Desenvolvimento - React/Vue com VITE (porta padrão 5173) ✅✅✅
+            "http://localhost:5173",      # ✅ ADICIONE ESTA LINHA!
+            "http://127.0.0.1:5173",      # ✅ ADICIONE ESTA LINHA!
+            
+            # Desenvolvimento - Vue/outros (porta 8080)
+            "http://localhost:8080",
+            "http://127.0.0.1:8080",
+            
+            # Produção
+            "https://dungeon-generator-frontend.onrender.com",
         ],
         allow_credentials=True,
-        allow_methods=["*"],              # Permite todos os métodos (GET, POST, OPTIONS, etc)
+        allow_methods=["*"],              # Permite GET, POST, OPTIONS, etc
         allow_headers=["*"],              # Permite todos os headers
     )
 
@@ -33,7 +47,7 @@ def create_app() -> FastAPI:
     app.include_router(stories.router)
     app.include_router(pix.router)
     app.include_router(coins.router)
-    app.include_router(webhooks.router)  # ← ADICIONE ESTA LINHA
+    app.include_router(webhooks.router)
 
     return app
 

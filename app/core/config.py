@@ -19,11 +19,11 @@ class Settings(BaseSettings):
     stripe_publishable_key: str = Field(..., alias="STRIPE_PUBLISHABLE_KEY")
     stripe_webhook_secret: str = Field(..., alias="STRIPE_WEBHOOK_SECRET")
     stripe_success_url: str = Field(
-        "http://localhost:3000/payment/success?session_id={CHECKOUT_SESSION_ID}",
+        "http://localhost:8080/payment/success?session_id={CHECKOUT_SESSION_ID}",
         alias="STRIPE_SUCCESS_URL"
     )
     stripe_cancel_url: str = Field(
-        "http://localhost:3000/payment/cancel",
+        "http://localhost:8080/payment/cancel",
         alias="STRIPE_CANCEL_URL"
     )
     # ==============================================

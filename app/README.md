@@ -746,6 +746,6 @@ STRIPE_PRICE_ID=price_...
 uvicorn app.main:app --reload
 
 
-# Ativar Ngrok : 
+# Ativar Ngrok PARA TESTAR WEBHOOK DE PAGAMENTOS : 
 
 ngrok http 8000

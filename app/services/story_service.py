@@ -22,15 +22,23 @@ class StoryService:
         self.db.collection("stories").document(story_id).set(story_data)
         return story_id
 
-    def add_step(self, story_id, index, text, choices):
+    def add_step(
+         self,
+         story_id: str,
+         index: int,
+         text: str,
+         choices: list,
+         state: dict | None = None  # 🔥 PARÂMETRO ADICIONADO
+        ):
         step_id = str(uuid4())
         step_data = {
-            "step_id": step_id,
-            "story_id": story_id,
-            "index": index,
-            "text": text,
-            "choices": choices,
-            "created_at": datetime.utcnow(),
+             "step_id": step_id,
+             "story_id": story_id,
+             "index": index,
+             "text": text,
+             "choices": choices,
+             "state": state or {},  # 🔥 SALVANDO STATE
+             "created_at": datetime.utcnow(),
         }
 
         self.db.collection("stories").document(story_id).collection("steps").document(step_id).set(step_data)
@@ -50,24 +58,34 @@ class StoryService:
         return doc.to_dict() if doc.exists else None
 
     def choose(self, story_id, step_id, choice_index):
-        # Aqui você pode implementar a lógica de IA e persistência do novo passo
-        pass
+        """Marca uma escolha no passo atual"""
+        step_ref = self.db.collection("stories").document(story_id)\
+                          .collection("steps").document(step_id)
+        
+        step_ref.update({
+            "chosen_choice": choice_index,  # 🔥 SALVA QUAL ESCOLHA FOI FEITA
+            "chosen_at": datetime.utcnow()
+        })
+        
+        # Atualiza o timestamp da história
+        self.db.collection("stories").document(story_id).update({
+            "updated_at": datetime.utcnow()
+        })
 
     def recent_history(self, story_id, k=10):
         steps_ref = self.db.collection("stories").document(story_id).collection("steps")
         query = steps_ref.order_by("index").limit_to_last(k)
-        return [doc.to_dict() for doc in query.get()]  # ✅ Correção aplicada aqui
+        return [doc.to_dict() for doc in query.get()]
 
     def list_user_stories(self, uid, limit=50):
-        query = self.db.collection("stories").where("owner_uid", "==", uid).order_by("created_at", direction="DESCENDING").limit(limit)
+        query = self.db.collection("stories").where("owner_uid", "==", uid)\
+                      .order_by("created_at", direction="DESCENDING").limit(limit)
         return [doc.to_dict() for doc in query.stream()]
   
-   
     def list_steps(self, story_id):
         steps_ref = self.db.collection("stories").document(story_id).collection("steps")
         query = steps_ref.order_by("index")
         return [doc.to_dict() for doc in query.stream()]
-
 
 
 S = StoryService()

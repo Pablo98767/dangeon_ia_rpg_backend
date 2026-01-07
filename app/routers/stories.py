@@ -7,10 +7,7 @@ from app.deps.auth import firebase_current_user
 from app.models.story import StartStoryIn, StepOut, ChooseIn, StoryMetaOut, StorySummaryOut
 from app.services.story_service import StoryService
 from app.services.ai_orchestrator import generate_next_step
-
-# ============ ADICIONAR ESTAS IMPORTAÇÕES ============
 from app.services.coins_service import coins_service, STORY_CREATION_COST, CHOICE_COST
-# ====================================================
 
 S = StoryService()
 router = APIRouter(prefix="/stories", tags=["stories"])
@@ -27,16 +24,14 @@ def _ensure_owner(story_id: str, uid: str):
 async def start_story(body: StartStoryIn, user=Depends(firebase_current_user)):
     uid = user["uid"]
     
-    # ============ VERIFICAR E DEDUZIR MOEDAS ============
     has_coins = await coins_service.has_sufficient_coins(uid, STORY_CREATION_COST)
     if not has_coins:
         user_coins = await coins_service.get_user_balance(uid)
         raise HTTPException(
-            status_code=402,  # Payment Required
+            status_code=402,
             detail=f"Moedas insuficientes. Você tem {user_coins.balance} moedas, mas precisa de {STORY_CREATION_COST}."
         )
     
-    # Deduz as moedas ANTES de criar a história
     story_id = S.new_story(uid, body.theme_prompt, body.character_prompt)
     
     try:
@@ -47,10 +42,7 @@ async def start_story(body: StartStoryIn, user=Depends(firebase_current_user)):
             reference_id=story_id
         )
     except Exception as e:
-        # Se falhar ao deduzir moedas, poderia deletar a história criada
-        # Mas por ora vamos apenas logar o erro
         raise HTTPException(status_code=500, detail=f"Erro ao processar moedas: {str(e)}")
-    # ====================================================
 
     step_payload = await generate_next_step(
         theme=body.theme_prompt,
@@ -59,7 +51,13 @@ async def start_story(body: StartStoryIn, user=Depends(firebase_current_user)):
         max_choices=body.initial_choices
     )
 
-    step_id = S.add_step(story_id, step_payload["index"], step_payload["text"], step_payload["choices"])
+    step_id = S.add_step(
+        story_id, 
+        step_payload["index"], 
+        step_payload["text"], 
+        step_payload["choices"],
+        step_payload.get("state")  # 🔥 PASSANDO STATE
+    )
 
     return StepOut(
         story_id=story_id,
@@ -68,6 +66,7 @@ async def start_story(body: StartStoryIn, user=Depends(firebase_current_user)):
         text=step_payload["text"],
         choices=step_payload["choices"],
         created_at=datetime.utcnow(),
+        state=step_payload.get("state")
     )
 
 @router.post("/{story_id}/choose", response_model=StepOut)
@@ -84,7 +83,6 @@ async def choose_and_continue(story_id: str, body: ChooseIn, user=Depends(fireba
     if body.choice_index < 0 or body.choice_index >= len(step["choices"]):
         raise HTTPException(status_code=400, detail="Índice de escolha inválido")
 
-    # ============ VERIFICAR E DEDUZIR MOEDAS ============
     has_coins = await coins_service.has_sufficient_coins(uid, CHOICE_COST)
     if not has_coins:
         user_coins = await coins_service.get_user_balance(uid)
@@ -102,7 +100,6 @@ async def choose_and_continue(story_id: str, body: ChooseIn, user=Depends(fireba
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao processar moedas: {str(e)}")
-    # ====================================================
 
     S.choose(story_id, current_step_id, body.choice_index)
 
@@ -117,7 +114,13 @@ async def choose_and_continue(story_id: str, body: ChooseIn, user=Depends(fireba
         max_choices=max_choices
     )
 
-    next_step_id = S.add_step(story_id, next_payload["index"], next_payload["text"], next_payload["choices"])
+    next_step_id = S.add_step(
+        story_id, 
+        next_payload["index"], 
+        next_payload["text"], 
+        next_payload["choices"],
+        next_payload.get("state")  # 🔥 PASSANDO STATE
+    )
 
     return StepOut(
         story_id=story_id,
@@ -126,6 +129,7 @@ async def choose_and_continue(story_id: str, body: ChooseIn, user=Depends(fireba
         text=next_payload["text"],
         choices=next_payload["choices"],
         created_at=datetime.utcnow(),
+        state=next_payload.get("state")
     )
 
 @router.post("/{story_id}/steps/send", response_model=StepOut)
@@ -133,8 +137,6 @@ async def send_steps(story_id: str, user=Depends(firebase_current_user)):
     uid = user["uid"]
     story = _ensure_owner(story_id, uid)
 
-    # ============ VERIFICAR E DEDUZIR MOEDAS ============
-    # Este endpoint também gera conteúdo novo, então deve cobrar
     has_coins = await coins_service.has_sufficient_coins(uid, CHOICE_COST)
     if not has_coins:
         user_coins = await coins_service.get_user_balance(uid)
@@ -152,7 +154,6 @@ async def send_steps(story_id: str, user=Depends(firebase_current_user)):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao processar moedas: {str(e)}")
-    # ====================================================
 
     steps = S.list_steps(story_id)
     steps = sorted(steps, key=lambda d: d["index"])
@@ -165,7 +166,13 @@ async def send_steps(story_id: str, user=Depends(firebase_current_user)):
         max_choices=max_choices
     )
 
-    step_id = S.add_step(story_id, next_payload["index"], next_payload["text"], next_payload["choices"])
+    step_id = S.add_step(
+        story_id, 
+        next_payload["index"], 
+        next_payload["text"], 
+        next_payload["choices"],
+        next_payload.get("state")  # 🔥 PASSANDO STATE
+    )
 
     return StepOut(
         story_id=story_id,
@@ -174,6 +181,7 @@ async def send_steps(story_id: str, user=Depends(firebase_current_user)):
         text=next_payload["text"],
         choices=next_payload["choices"],
         created_at=datetime.utcnow(),
+        state=next_payload.get("state")
     )
 
 @router.post("/{story_id}/continue", response_model=StepOut)
@@ -181,7 +189,6 @@ async def continue_story(story_id: str, user=Depends(firebase_current_user)):
     uid = user["uid"]
     story = _ensure_owner(story_id, uid)
 
-    # ============ VERIFICAR E DEDUZIR MOEDAS ============
     has_coins = await coins_service.has_sufficient_coins(uid, CHOICE_COST)
     if not has_coins:
         user_coins = await coins_service.get_user_balance(uid)
@@ -199,7 +206,6 @@ async def continue_story(story_id: str, user=Depends(firebase_current_user)):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao processar moedas: {str(e)}")
-    # ====================================================
 
     hist = S.recent_history(story_id, k=10)
     hist = sorted(hist, key=lambda d: d["index"])
@@ -216,7 +222,8 @@ async def continue_story(story_id: str, user=Depends(firebase_current_user)):
         story_id,
         next_payload["index"],
         next_payload["text"],
-        next_payload["choices"]
+        next_payload["choices"],
+        next_payload.get("state")  # 🔥 PASSANDO STATE
     )
 
     return StepOut(
@@ -226,9 +233,9 @@ async def continue_story(story_id: str, user=Depends(firebase_current_user)):
         text=next_payload["text"],
         choices=next_payload["choices"],
         created_at=datetime.utcnow(),
+        state=next_payload.get("state")
     )
 
-# Os endpoints GET não precisam de verificação de moedas
 @router.get("/{story_id}", response_model=StoryMetaOut)
 def get_story_meta(story_id: str, user=Depends(firebase_current_user)):
     uid = user["uid"]
