@@ -5,38 +5,26 @@ from app.routers import health, auth, users
 from app.routers import stories
 from app.routers import pix
 from app.routers import coins
-from app.routers import webhooks
-
+from app.routers import webhooks  # ← ADICIONE ESTE IMPORT
 
 def create_app() -> FastAPI:
+    # 1. Instância única do FastAPI
     app = FastAPI(title=settings.app_name)
 
-    # ============================================
-    # CONFIGURAÇÃO CORS CORRIGIDA ✅
-    # ============================================
+    # Configurar CORS para permitir requisições do frontend
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
-            # Desenvolvimento - React (Create React App)
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            
-            # Desenvolvimento - React/Vue com VITE (porta padrão 5173) ✅✅✅
-            "http://localhost:5173",      # ✅ ADICIONE ESTA LINHA!
-            "http://127.0.0.1:5173",      # ✅ ADICIONE ESTA LINHA!
-            
-            # Desenvolvimento - Vue/outros (porta 8080)
-            "http://localhost:8080",
-            "http://127.0.0.1:8080",
-            
-            # Produção
-            "https://dungeon-generator-frontend.onrender.com",
+            "http://localhost:3000",      # React dev server
+            "http://127.0.0.1:3000",      # React dev server alternativo
+            "https://dungeon-generator-frontend.onrender.com", # frontend em produção
         ],
         allow_credentials=True,
-        allow_methods=["*"],              # Permite GET, POST, OPTIONS, etc
+        allow_methods=["*"],              # Permite todos os métodos (GET, POST, OPTIONS, etc)
         allow_headers=["*"],              # Permite todos os headers
     )
-
+    
+    # 3. Rota raiz
     @app.get("/")
     def root():
         return {"message": f"Bem-vindo à API Backend do APP D&D"}
@@ -47,8 +35,9 @@ def create_app() -> FastAPI:
     app.include_router(stories.router)
     app.include_router(pix.router)
     app.include_router(coins.router)
-    app.include_router(webhooks.router)
+    app.include_router(webhooks.router)  # ← ADICIONE ESTA LINHA
 
     return app
 
+# 5. Criação da instância global que o Render/Uvicorn vai rodar
 app = create_app()
