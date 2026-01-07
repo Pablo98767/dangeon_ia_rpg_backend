@@ -6,24 +6,35 @@ from app.routers import stories
 from app.routers import pix
 from app.routers import coins
 from app.routers import webhooks  # ← ADICIONE ESTE IMPORT
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 def create_app() -> FastAPI:
     # 1. Removida a duplicidade: declaramos o app apenas uma vez
-app.add_middleware(
-    CORSMiddleware,
-    # Em vez de misturar os dois, vamos focar no que funciona para o navegador
-    allow_origins=[
-        "http://localhost:3000",
-        "https://dungeon-generator-frontend.onrender.com",
-        "https://dungeon-ia-master.lovable.app",
-    ],
-    # A regex deve ser usada apenas se o allow_origins não for suficiente
-    allow_origin_regex=r"https://.*\.lovable\.app|https://.*\.gptengineer\.run",
-    allow_credentials=True,
-    allow_methods=["*"],  # Garante que OPTIONS, POST, GET sejam aceitos
-    allow_headers=["*"],  # Garante que Authorization e Content-Type sejam aceitos
-)
 
+# Certifique-se de que o import do settings existe ou ajuste conforme seu projeto
+# from app.core.config import settings 
+
+def create_app() -> FastAPI:
+    # Tudo dentro da função PRECISA de 4 espaços de recuo
+    app = FastAPI(title="Dungeon IA RPG") 
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "https://dungeon-generator-frontend.onrender.com",
+            "https://dungeon-ia-master.lovable.app",
+        ],
+        allow_origin_regex=r"https://.*\.lovable\.app|https://.*\.gptengineer\.run",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+# Esta linha cria a instância que o Uvicorn procura
+app = create_app()
 
     @app.get("/")
     def root():
