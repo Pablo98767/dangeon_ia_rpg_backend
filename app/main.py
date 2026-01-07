@@ -9,16 +9,16 @@ from app.routers import webhooks  # ← ADICIONE ESTE IMPORT
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.core.config import settings
+from app.routers import health, auth, users, stories, pix, coins, webhooks
+
 def create_app() -> FastAPI:
-    # 1. Removida a duplicidade: declaramos o app apenas uma vez
+    # 1. Instância única do FastAPI
+    app = FastAPI(title=settings.app_name)
 
-# Certifique-se de que o import do settings existe ou ajuste conforme seu projeto
-# from app.core.config import settings 
-
-def create_app() -> FastAPI:
-    # Tudo dentro da função PRECISA de 4 espaços de recuo
-    app = FastAPI(title="Dungeon IA RPG") 
-
+    # 2. Configuração de CORS (com recuo de 4 espaços)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
@@ -33,7 +33,18 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-# Esta linha cria a instância que o Uvicorn procura
+    # 3. Inclusão das rotas (Routers)
+    app.include_router(health.router, tags=["Health"])
+    app.include_router(auth.router, prefix="/auth", tags=["Auth"])
+    app.include_router(users.router, prefix="/users", tags=["Users"])
+    app.include_router(stories.router, prefix="/stories", tags=["Stories"])
+    app.include_router(pix.router, prefix="/pix", tags=["PIX"])
+    app.include_router(coins.router, prefix="/coins", tags=["Coins"])
+    app.include_router(webhooks.router, prefix="/webhooks", tags=["Webhooks"])
+
+    return app
+
+# 4. Criação da instância global que o Render/Uvicorn vai rodar
 app = create_app()
 
     @app.get("/")
