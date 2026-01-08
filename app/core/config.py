@@ -23,7 +23,7 @@ class Settings(BaseSettings):
         alias="STRIPE_SUCCESS_URL"
     )
     stripe_cancel_url: str = Field(
-        "http://localhost:8080/payment/cancel",
+        "http://localhost:8080/store",
         alias="STRIPE_CANCEL_URL"
     )
     # ==============================================
