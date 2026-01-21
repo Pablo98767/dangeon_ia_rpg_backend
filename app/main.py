@@ -18,7 +18,7 @@ def create_app() -> FastAPI:
             "http://localhost:3000",      # React dev server
             "http://127.0.0.1:3000",      # React dev server alternativo
             "https://dungeon-generator-frontend.onrender.com", # frontend em produção
-            #"https://storydungeon.com.br"
+            "https://storydungeon.com.br"
         ],
         allow_credentials=True,
         allow_methods=["*"],              # Permite todos os métodos (GET, POST, OPTIONS, etc)
