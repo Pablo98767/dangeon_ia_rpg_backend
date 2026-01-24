@@ -17,7 +17,7 @@ from app.services.firebase_admin_svc import firestore_client
 # =======================
 # Constantes
 # =======================
-INITIAL_BONUS_COINS = 50
+INITIAL_BONUS_COINS = 200
 STORY_CREATION_COST = 5
 CHOICE_COST = 5
 
