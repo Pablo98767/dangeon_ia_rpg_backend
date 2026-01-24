@@ -29,14 +29,14 @@ COIN_PACKAGES = [
     CoinPackage(
         package_id="pack_100",
         name="Pacote Iniciante",
-        coins=100,
+        coins=300,
         price_brl=6.00,
         discount_percentage=None
     ),
     CoinPackage(
         package_id="pack_500",
         name="Pacote Popular",
-        coins=500,
+        coins=800,
         price_brl=15.00,
         discount_percentage=16.67
     ),
